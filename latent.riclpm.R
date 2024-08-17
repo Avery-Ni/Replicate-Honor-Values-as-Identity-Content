@@ -507,6 +507,29 @@ nu.13 == 0 - nu.14 - nu.15 - nu.16 - nu.17
 
 
 
+model.nons <- c(measure.v2,RICLPM.Base)
+
+RICLPM.fit.v2a <- lavaan(model.nons, data = df, estimator = 'MLR', missing = 'FIML', meanstructure = T, int.ov.free = T)
+
+summary(RICLPM.fit.v2a,
+        standardized = T,
+        fit.measures = TRUE,
+        rsquare= TRUE,
+        nd=3)
+
+
+RICLPM.fit.v2b <- lavaan(model.nons, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+summary(RICLPM.fit.v2b,
+        standardized = T,
+        fit.measures = TRUE,
+        rsquare= TRUE,
+        nd=3)
+
+
+# Multigroup riclpm ----
+
+
+
 MG.RICLPM.Base <- '
 #VARIANCES of latent variables
 
@@ -566,60 +589,17 @@ T3WHon ~ c(beta.14_11.g1, beta.14_11.g2)*T2WRegId + c(beta.14_12.g1, beta.14_12.
 RIRegId + RIHon ~~ c(0, 0)*T1WRegId + c(0, 0)*T1WHon
 '
 
-model.nons <- c(measure.v2,RICLPM.Base)
+RICLPM.fit.v3a <- lavaan(MG.RICLPM.Base, data = df.v1, estimator = 'MLR', missing = 'FIML', group = "gender", meanstructure = T, int.ov.free = T)
 
-RICLPM.fit.r <- lavaan(model.nons, data = df, estimator = 'MLR', missing = 'FIML', meanstructure = T, int.ov.free = T)
-
-summary(RICLPM.fit.r,
+summary(RICLPM.fit.v3a,
         standardized = T,
         fit.measures = TRUE,
         rsquare= TRUE,
         nd=3)
 
 
-RICLPM.fit.o2 <- lavaan(model.nons, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
-summary(RICLPM.fit.o2,
-        standardized = T,
-        fit.measures = TRUE,
-        rsquare= TRUE,
-        nd=3)
-
-df.2 <- df %>% 
-  mutate(RegIdT1 = 0.25*RegId1 + 0.25*RegId2 + 0.25*RegId3 + 0.25*RegId4,
-         RegIdT2 = 0.25*T2RegId1 + 0.25*T2RegId2 + 0.25*T2RegId3 + 0.25*T2RegId4,
-         RegIdT3 = 0.25*T3RegId1 + 0.25*T3RegId2 + 0.25*T3RegId3 + 0.25*T3RegId4,
-         HonT1 = 0.2*HonCon1 + 0.2*HonCon2 + 0.2*HonCon3 + 0.2*HonCon4 + 0.2*HonCon5,
-         HonT2 = 0.2*T2HonCon1 + 0.2*T2HonCon2 + 0.2*T2HonCon3 + 0.2*T2HonCon4 + 0.2*T2HonCon5,
-         HonT3 = 0.2*T3HonCon1 + 0.2*T3HonCon2 + 0.2*T3HonCon3 + 0.2*T3HonCon4 + 0.2*T3HonCon5)
-
-write.csv(df.2, "df.2.csv")
-
-RICLPM.fit.2r <- lavaan(RICLPM.Base, data = df.2, estimator = 'MLR', missing = 'FIML', meanstructure = T, int.ov.free = T)
-
-summary(RICLPM.fit.2r,
-        standardized = T,
-        fit.measures = TRUE,
-        rsquare= TRUE,
-        nd=3)
-
-RICLPM.fit.o1 <- lavaan(RICLPM.Base, data = df.2, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
-summary(RICLPM.fit.o1,
-        standardized = T,
-        fit.measures = TRUE,
-        rsquare= TRUE,
-        nd=3)
-
-
-
-df.3 <- df %>%
-  mutate(RegIdT1 = r,
-         RegIdT2 = r2,
-         RegIdT3 = r3,
-         HonT1 = h,
-         HonT2 = h2,
-         HonT3 = h3)
-RICLPM.fit.o1a <- lavaan(RICLPM.Base, data = df.3, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
-summary(RICLPM.fit.o1a,
+RICLPM.fit.v3b <- lavaan(MG.RICLPM.Base, data = df.v1, estimator = 'ML', missing = 'ml.x', group = "gender", meanstructure = T, int.ov.free = T)
+summary(RICLPM.fit.v3b,
         standardized = T,
         fit.measures = TRUE,
         rsquare= TRUE,
