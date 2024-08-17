@@ -1,0 +1,716 @@
+---
+title: "Honor Values as Identity Content"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos=list(CRAN='http://cran.rstudio.com/'))
+```
+
+## 0. Overview
+
+The study uses a Random Intercept Cross-Lagged Panel model to examine the relationship between identification with a regional group membership in southern Italy and honor-related values of reputation. 
+
+Participants were 1,173 individuals (Mage = 16.70, SDage = 1.10; 43.8% female, 54.8% male, 1.4% did not specify their gender) from Campania, a southern region in Italy. Questionnaires were in Italian and items were measured on a 7-point Likert scale (1 = completely disagree, 7 = completely agree). 
+
+## 0.1 Codebook
+
+CNOTMIS: Participants could be matched across waves.
+r-r3: average of identity items in waves 1, 2 and 3
+h-h3: average of honor items in waves 1, 2 and 3
+age: participants' age
+gender: participants' gender (1 = Male, 2 = Female)
+
+RegId1: I am pleased to think of myself as Campano
+RegId2: I am proud I am Campano
+RegId3: I Identify with other people who live in Campania
+RegId4: I feel a sense of belonging to Campania
+
+HonCon1:it is important to me that others see me as someone who deserves respect
+HonCon2:it is important to me that others regard me as someone who is not to be disrespected
+HonCon3:how others think of my family is important to me
+HonCon4:caring about the implications of my actions for my family’s social image is important to me
+HonCon5:it is important to me to defend my family from criticism
+
+(Prefix T2-T3 indicate the same measure at the second and third wave respectively)
+
+## 1. Install and load relevant packages 
+
+```{r}
+#install.packages("tidyverse")
+#install.packages("lavaan")
+#install.packages("semTools")
+#install.packages("psych")
+#install.packages("MBESS")
+
+library(tidyverse)
+library(lavaan)
+library(semTools)
+library(psych)
+library(MBESS)
+
+```
+
+## 2. Load data and descriptive statistics
+```{r}
+#load("df.Rda")
+
+psych::describe(df)
+```
+
+###2.1 Center Age and Gender
+
+```{r}
+df <- df %>% ungroup() %>% mutate(age.uncentered = age)
+
+df <- df %>% mutate(age = age - mean(age, na.rm = TRUE))
+```
+
+
+```{r}
+df<-df %>% mutate(gender.original = gender)
+df<-df %>% mutate(gender = if_else(gender == 1, 0, 1))
+```
+
+
+## 3. Reliability
+
+### 3.1 Regional identity
+
+```{r}
+# T1
+Omega.RegIdT1 <-df[, c(18, 19, 20, 21)]
+ci.reliability(data=Omega.RegIdT1, N = 1172, type = "omega", interval.type = "ml", B = 10000, conf.level = 0.95)
+
+# T2
+Omega.RegIdT2 <-df[, c(14, 15, 16, 17)]
+ci.reliability(data=Omega.RegIdT2, N = 1087, type = "omega", interval.type = "ml", B = 10000, conf.level = 0.95)
+
+# T3
+Omega.RegIdT3 <-df[, c(10, 11, 12, 13)]
+ci.reliability(data=Omega.RegIdT3, N = 1087, type = "omega", interval.type = "ml", B = 10000, conf.level = 0.95)
+```
+
+## 3.2 Honor
+
+```{r}
+# T1
+Omega.HonorT1 <-df[, c(32, 33, 34, 35, 36)]
+ci.reliability(data=Omega.HonorT1, N = 1172, type = "omega", interval.type = "ml", B = 10000, conf.level = 0.95)
+
+# T2
+Omega.HonorT2 <-df[, c(27, 28, 29, 30, 31)]
+ci.reliability(data=Omega.HonorT2, N = 1087, type = "omega", interval.type = "ml", B = 10000, conf.level = 0.95)
+
+# T3
+Omega.HonorT3 <-df[, c(22, 23, 24, 25, 26)]
+ci.reliability(data=Omega.HonorT3, N = 1086, type = "omega", interval.type = "ml", B = 10000, conf.level = 0.95)
+```
+
+## 4. Test of longitudinal measurement invariance
+
+### 4.1 Regional identity
+
+####4.1.1 Configural model
+
+```{r}
+RegId.Conf <- 
+  '
+  RegIdT1 =~ RegId1 + RegId2 + RegId3 + RegId4
+  RegIdT2 =~ T2RegId1 + T2RegId2 + T2RegId3 + T2RegId4
+	RegIdT3 =~ T3RegId1 + T3RegId2 + T3RegId3 + T3RegId4
+	
+	#Method-specific factors
+	
+	M1 =~ 1*RegId2 + 1*T2RegId2 + 1*T3RegId2
+	M2 =~ 1*RegId3 + 1*T2RegId3 + 1*T3RegId3
+	M3 =~ 1*RegId4 + 1*T2RegId4 + 1*T3RegId4
+	
+	M1 + M2 + M3 ~~ 0*RegIdT1 + 0*RegIdT2 + 0*RegIdT3
+	M1 ~~ 0*M2 + 0*M3
+	M2 ~~ 0*M3
+'
+
+Fit.RegId.Conf <- cfa(RegId.Conf, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(Fit.RegId.Conf, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+
+#### 4.1.2 Metric model
+
+```{r}
+RegId.Metr <- 
+  '
+  RegIdT1 =~ a*RegId1 + b*RegId2 + c*RegId3 + d*RegId4
+  RegIdT2 =~ a*T2RegId1 + b*T2RegId2 + c*T2RegId3 + d*T2RegId4
+	RegIdT3 =~ a*T3RegId1 + b*T3RegId2 + c*T3RegId3 + d*T3RegId4
+
+#Method-specific factors
+	
+	M1 =~ 1*RegId2 + 1*T2RegId2 + 1*T3RegId2
+	M2 =~ 1*RegId3 + 1*T2RegId3 + 1*T3RegId3
+	M3 =~ 1*RegId4 + 1*T2RegId4 + 1*T3RegId4
+	
+	M1 + M2 + M3 ~~ 0*RegIdT1 + 0*RegIdT2 + 0*RegIdT3
+	M1 ~~ 0*M2 + 0*M3
+	M2 ~~ 0*M3
+'
+
+Fit.RegId.Metr <- cfa(RegId.Metr, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(Fit.RegId.Metr, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+
+#### 4.1.3 Scalar model 
+
+```{r}
+RegId.Scal <- 
+  '
+  RegIdT1 =~ a*RegId1 + b*RegId2 + c*RegId3 + d*RegId4
+  RegIdT2 =~ a*T2RegId1 + b*T2RegId2 + c*T2RegId3 + d*T2RegId4
+	RegIdT3 =~ a*T3RegId1 + b*T3RegId2 + c*T3RegId3 + d*T3RegId4
+	
+	RegId1 + T2RegId1 + T3RegId1 ~ 0*1
+	RegId2 + T2RegId2 + T3RegId2 ~ f*1
+	RegId3 + T2RegId3 + T3RegId3 ~ g*1
+	RegId4 + T2RegId4 + T3RegId4 ~ h*1
+	
+	RegIdT1 + RegIdT2 + RegIdT3 ~ 1
+
+#Method-specific factors
+	
+	M1 =~ 1*RegId2 + 1*T2RegId2 + 1*T3RegId2
+	M2 =~ 1*RegId3 + 1*T2RegId3 + 1*T3RegId3
+	M3 =~ 1*RegId4 + 1*T2RegId4 + 1*T3RegId4
+	
+	M1 + M2 + M3 ~~ 0*RegIdT1 + 0*RegIdT2 + 0*RegIdT3
+	M1 ~~ 0*M2 + 0*M3
+	M2 ~~ 0*M3
+'
+
+Fit.RegId.Scal <- cfa(RegId.Scal, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(Fit.RegId.Scal, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+```
+
+
+####4.1.4 Model Comparison
+```{r}
+summary(compareFit(Fit.RegId.Conf,Fit.RegId.Metr, Fit.RegId.Scal))
+```
+
+
+### 4.2 Honor 
+
+#### 4.2.1 Configural model
+
+```{r}
+Hon.Conf <- 
+  '
+  HonT1 =~ HonCon1 + HonCon2 + HonCon3 + HonCon4 + HonCon5 
+  HonT2 =~ T2HonCon1 + T2HonCon2 + T2HonCon3 + T2HonCon4 + T2HonCon5
+  HonT3 =~ T3HonCon1 + T3HonCon2 + T3HonCon3 + T3HonCon4 + T3HonCon5
+	
+	#Method-specific factors
+	
+	M1 =~ 1*HonCon2 + 1*T2HonCon2 + 1*T3HonCon2
+	M2 =~ 1*HonCon3 + 1*T2HonCon3 + 1*T3HonCon3
+	M3 =~ 1*HonCon4 + 1*T2HonCon4 + 1*T3HonCon4
+	M4 =~ 1*HonCon5 + 1*T2HonCon5 + 1*T3HonCon5
+	
+	M1 + M2 + M3 + M4 ~~ 0*HonT1 + 0*HonT2 + 0*HonT3
+	#M1 ~~ 0*M2 + 0*M3 + 0*M4
+	#M2 ~~ 0*M3 + 0*M4
+	#M3 ~~ 0*M4
+'
+
+Fit.Hon.Conf <- cfa(Hon.Conf, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(Fit.Hon.Conf, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+
+#### 4.2.2 Metric model
+
+```{r}
+Hon.Metr <- 
+  '
+  HonT1 =~ a*HonCon1 + b*HonCon2 + c*HonCon3 + d*HonCon4 + e*HonCon5 
+  HonT2 =~ a*T2HonCon1 + b*T2HonCon2 + c*T2HonCon3 + d*T2HonCon4 + e*T2HonCon5
+  HonT3 =~ a*T3HonCon1 + b*T3HonCon2 + c*T3HonCon3 + d*T3HonCon4 + e*T3HonCon5
+	
+	#Method-specific factors
+	
+	M1 =~ 1*HonCon2 + 1*T2HonCon2 + 1*T3HonCon2
+	M2 =~ 1*HonCon3 + 1*T2HonCon3 + 1*T3HonCon3
+	M3 =~ 1*HonCon4 + 1*T2HonCon4 + 1*T3HonCon4
+	M4 =~ 1*HonCon5 + 1*T2HonCon5 + 1*T3HonCon5
+	
+	M1 + M2 + M3 + M4 ~~ 0*HonT1 + 0*HonT2 + 0*HonT3
+	#M1 ~~ 0*M2 + 0*M3 + 0*M4
+	#M2 ~~ 0*M3 + 0*M4
+	#M3 ~~ 0*M4
+'
+
+Fit.Hon.Metr <- cfa(Hon.Metr, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(Fit.Hon.Metr, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+#### 4.2.3 Scalar model
+
+```{r}
+Hon.Scal <- 
+  '
+  HonT1 =~ a*HonCon1 + b*HonCon2 + c*HonCon3 + d*HonCon4 + e*HonCon5 
+  HonT2 =~ a*T2HonCon1 + b*T2HonCon2 + c*T2HonCon3 + d*T2HonCon4 + e*T2HonCon5
+  HonT3 =~ a*T3HonCon1 + b*T3HonCon2 + c*T3HonCon3 + d*T3HonCon4 + e*T3HonCon5
+  
+  HonCon1 + T2HonCon1 + T3HonCon1 ~ 0*1
+  HonCon2 + T2HonCon2 + T3HonCon2 ~ f*1
+  HonCon3 + T2HonCon3 + T3HonCon3 ~ g*1
+  HonCon4 + T2HonCon4 + T3HonCon4 ~ h*1
+  HonCon5 + T2HonCon5 + T3HonCon5 ~ i*1
+  
+  HonT1 + HonT2 + HonT3 ~ 1
+	
+	#Method-specific factors
+	
+	M1 =~ 1*HonCon2 + 1*T2HonCon2 + 1*T3HonCon2
+	M2 =~ 1*HonCon3 + 1*T2HonCon3 + 1*T3HonCon3
+	M3 =~ 1*HonCon4 + 1*T2HonCon4 + 1*T3HonCon4
+	M4 =~ 1*HonCon5 + 1*T2HonCon5 + 1*T3HonCon5
+	
+	M1 + M2 + M3 + M4 ~~ 0*HonT1 + 0*HonT2 + 0*HonT3
+	#M1 ~~ 0*M2 + 0*M3 + 0*M4
+	#M2 ~~ 0*M3 + 0*M4
+	#M3 ~~ 0*M4
+'
+
+Fit.Hon.Scal <- cfa(Hon.Scal, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(Fit.Hon.Scal, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+modindices(Fit.Hon.Scal, sort = TRUE, minimum.value = 4)
+
+```
+
+#### 4.2.4 Model comparison
+
+```{r}
+summary(compareFit(Fit.Hon.Conf, Fit.Hon.Metr, Fit.Hon.Scal))
+```
+
+## 5. Cross-lagged panel model (CLPM) to test for stationarity
+
+### 5.1 Freely estimated CLPM 
+
+```{r}
+
+CLPM.free <- '
+r2 ~ r + h
+h2 ~ r + h
+
+r3 ~ r2 + h2
+h3 ~ r2 + h2
+
+r ~~ h
+r2 ~~ h2
+r3 ~~ h3
+
+r ~~ r
+h ~~ h
+
+r2 ~~ r2
+h2 ~~ h2
+
+r3 ~~ r3
+h3 ~~ h3
+'
+CLPM.fit.free <- lavaan(CLPM.free, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(CLPM.fit.free, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+### 5.2 CLPM with stability stationarity 
+
+```{r}
+CLPM.StabStat <- '
+r2 ~ a*r + h
+h2 ~ r + b*h
+
+r3 ~ a*r2 + h2
+h3 ~ r2 + b*h2
+
+r ~~ h
+r2 ~~ h2
+r3 ~~ h3
+
+r ~~ r
+h ~~ h
+
+r2 ~~ r2
+h2 ~~ h2
+
+r3 ~~ r3
+h3 ~~ h3
+'
+CLPM.fit.StabStat <- lavaan(CLPM.StabStat, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(CLPM.fit.StabStat, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+### 5.3 CLPM with full stationarity 
+
+```{r}
+CLPM.FullStat<- '
+r2 ~ a*r + c*h
+h2 ~ d*r + b*h
+r3 ~ a*r2 + c*h2
+h3 ~ d*r2 + b*h2
+
+r ~~ h
+r2 ~~ h2
+r3 ~~ h3
+
+r ~~ r
+h ~~ h
+
+r2 ~~ r2
+h2 ~~ h2
+
+r3 ~~ r3
+h3 ~~ h3
+'
+CLPM.fit.FullStat <- lavaan(CLPM.FullStat, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(CLPM.fit.FullStat, standardized = TRUE, rsq = TRUE, fit.measures = TRUE, nd=3)
+
+```
+
+### 5.4 Model Comparison
+
+```{r}
+lavTestLRT(CLPM.fit.free, CLPM.fit.StabStat, CLPM.fit.FullStat)
+```
+Chi-square difference tests non-significant (i.e., model fit is not significantly worse for the more restricted model) between freely estimated model, stability stationarity model, and full stationarity model --> most restrictive model with full stability is assumed 
+
+## 6. Random-intercept cross-lagged panel model (RI-CLPM)
+
+### 6.1 RI-CLPM with full stationarity
+
+#### 6.1.1 No control variables
+
+```{r}
+RICLPM <- 
+'
+#between paths
+
+Br =~ 1*r + 1*r2 + 1*r3
+Bh =~ 1*h + 1*h2 + 1*h3
+
+#within paths
+
+wr1 =~ 1*r
+wr2 =~ 1*r2
+wr3 =~ 1*r3
+
+wh1 =~ 1*h
+wh2 =~ 1*h2
+wh3 =~ 1*h3
+
+# set residual variance zero
+
+r ~~ 0*r
+r2 ~~ 0*r2
+r3 ~~ 0*r3
+
+h ~~ 0*h
+h2 ~~ 0*h2
+h3 ~~ 0*h3
+
+#lagged effects within-person
+
+wr2 ~ a*wr1 + c*wh1 
+wh2 ~ d*wr1 + b*wh1
+wr3 ~ a*wr2 + c*wh2
+wh3 ~ d*wr2 + b*wh2
+
+#covariance within-person 
+wr1 ~~ wh1
+wr2 ~~ wh2
+wr3 ~~ wh3
+
+#variance and covariance of random intercepts
+Br ~~ Br
+Bh ~~ Bh
+Br ~~ Bh
+
+# Residual variance of the within-person variance
+wr1 ~~ wr1
+wh1 ~~ wh1
+wr2 ~~ wr2
+wh2 ~~ wh2
+wr3 ~~ wr3
+wh3 ~~ wh3
+'
+
+RICLPM.fit <- lavaan(RICLPM, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(RICLPM.fit, 
+        standardized = T,
+        fit.measures = TRUE, 
+        rsquare= TRUE,
+        nd=3)
+
+```
+
+#### 6.1.2 with control variables
+```{r}
+RICLPM.r <- 
+'
+#between paths
+
+Br =~ 1*r + 1*r2 + 1*r3
+Bh =~ 1*h + 1*h2 + 1*h3
+
+#within paths
+
+wr1 =~ 1*r
+wr2 =~ 1*r2
+wr3 =~ 1*r3
+
+wh1 =~ 1*h
+wh2 =~ 1*h2
+wh3 =~ 1*h3
+
+# set residual variance zero
+
+r ~~ 0*r
+r2 ~~ 0*r2
+r3 ~~ 0*r3
+
+h ~~ 0*h
+h2 ~~ 0*h2
+h3 ~~ 0*h3
+
+#lagged effects within-person
+
+wr2 ~ a*wr1 + c*wh1 
+wh2 ~ d*wr1 + b*wh1
+wr3 ~ a*wr2 + c*wh2
+wh3 ~ d*wr2 + b*wh2
+
+#covariates
+r + r2 + r3 + h + h2 + h3 ~ gender + age
+
+#covariance within-person 
+wr1 ~~ wh1
+wr2 ~~ wh2
+wr3 ~~ wh3
+
+#variance and covariance of random intercepts
+Br ~~ Br
+Bh ~~ Bh
+Br ~~ Bh
+
+# Residual variance of the within-person variance
+wr1 ~~ wr1
+wh1 ~~ wh1
+wr2 ~~ wr2
+wh2 ~~ wh2
+wr3 ~~ wr3
+wh3 ~~ wh3
+'
+
+RICLPM.fit.r <- lavaan(RICLPM.r, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary(RICLPM.fit.r, 
+        standardized = T,
+        fit.measures = TRUE, 
+        rsquare= TRUE,
+        nd=3)
+
+```
+
+#### 6.1.3 Confidence intervals
+```{r}
+parameterEstimates(RICLPM.fit.r)
+```
+
+#### 6.1.4 Model comparison with CLPM
+
+This relates to the CLPM and RI-CLPM without covariates
+```{r}
+lavTestLRT(CLPM.fit.FullStat, RICLPM.fit)
+```
+
+
+### 6.2 RI-CLPM with removed cross-lagged effect honor -> regional identity
+
+```{r}
+RICLPM.r_2 <- '
+#between paths
+
+Br =~ 1*r + 1*r2 + 1*r3
+Bh =~ 1*h + 1*h2 + 1*h3
+
+#within paths
+
+wr1 =~ 1*r
+wr2 =~ 1*r2
+wr3 =~ 1*r3
+
+wh1 =~ 1*h
+wh2 =~ 1*h2
+wh3 =~ 1*h3
+
+# set residual variance zero
+
+r ~~ 0*r
+r2 ~~ 0*r2
+r3 ~~ 0*r3
+
+h ~~ 0*h
+h2 ~~ 0*h2
+h3 ~~ 0*h3
+
+#lagged effects within-persor variance
+
+wr2 ~ a*wr1 
+wh2 ~ d*wr1 + b*wh1
+wr3 ~ a*wr2
+wh3 ~ d*wr2 + b*wh2
+
+#wr2 ~ a*wr1 + c*wh1 
+#wh2 ~ b*wh1
+#wr3 ~ a*wr2 + c*wh2
+#wh3 ~ b*wh2
+
+#covariates
+r + r2 + r3 + h + h2 + h3 ~ gender + age
+
+#covariance within-person variance (first wave is covariance, secord and third wave are covariances of residuals)
+wr1 ~~ wh1
+wr2 ~~ wh2
+wr3 ~~ wh3
+
+#variance and covariance of random intercepts
+Br ~~ Br
+Bh ~~ Bh
+Br ~~ Bh
+
+# Residual variance of the within-person centred variance
+wr1 ~~ wr1
+wh1 ~~ wh1
+wr2 ~~ wr2
+wh2 ~~ wh2
+wr3 ~~ wr3
+wh3 ~~ wh3
+
+'
+
+RICLPM.fit.r_2 <- lavaan(RICLPM.r_2, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary (RICLPM.fit.r_2, 
+        standardized = T,
+        fit.measures = TRUE, 
+        rsquare= TRUE,
+        nd=3)
+```
+
+#### 6.2.1 Model comparison
+
+```{r}
+#Compare models
+
+lavTestLRT(RICLPM.fit.r, RICLPM.fit.r_2)
+```
+Chi-square test nonsignificant - honor->identity cross-lagged path can be removed without significant deterioration of model fit
+
+### 6.3 RI-CLPM with removed cross-lagged effect regional identity -> honor 
+
+```{r}
+
+RICLPM.r_3 <- '
+#between paths
+
+Br =~ 1*r + 1*r2 + 1*r3
+Bh =~ 1*h + 1*h2 + 1*h3
+
+#within paths
+
+wr1 =~ 1*r
+wr2 =~ 1*r2
+wr3 =~ 1*r3
+
+wh1 =~ 1*h
+wh2 =~ 1*h2
+wh3 =~ 1*h3
+
+# set residual variance zero
+
+r ~~ 0*r
+r2 ~~ 0*r2
+r3 ~~ 0*r3
+
+h ~~ 0*h
+h2 ~~ 0*h2
+h3 ~~ 0*h3
+
+
+#lagged effects within-person variance
+
+wr2 ~ a*wr1 + c*wh1 
+wh2 ~ b*wh1
+wr3 ~ a*wr2 + c*wh2
+wh3 ~ b*wh2
+
+#covariates
+r + r2 + r3 + h + h2 + h3 ~ gender + age
+
+#covariance within-person variance 
+wr1 ~~ wh1
+wr2 ~~ wh2
+wr3 ~~ wh3
+
+#variance and covariance of random intercepts
+Br ~~ Br
+Bh ~~ Bh
+Br ~~ Bh
+
+# Residual variance of the within-person centred variance
+wr1 ~~ wr1
+wh1 ~~ wh1
+wr2 ~~ wr2
+wh2 ~~ wh2
+wr3 ~~ wr3
+wh3 ~~ wh3
+
+'
+RICLPM.fit.r_3 <- lavaan(RICLPM.r_3, data = df, estimator = 'ML', missing = 'ml.x', meanstructure = T, int.ov.free = T)
+
+summary (RICLPM.fit.r_3, 
+        standardized = T,
+        fit.measures = TRUE, 
+        rsquare= TRUE,
+        nd=3)
+```
+
+#### 6.3.1 Model comparison
+
+```{r}
+#Compare models
+
+lavTestLRT(RICLPM.fit.r, RICLPM.fit.r_3)
+```
+Chi-square test significant - removal of identity->honor cross-lagged path leads to significant deterioration of model fit
